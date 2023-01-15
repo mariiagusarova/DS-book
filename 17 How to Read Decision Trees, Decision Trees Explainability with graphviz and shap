@@ -1,0 +1,49 @@
+#load required packages
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+from sklearn import tree
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import tree as sklearn_tree
+import graphviz
+
+!pip install graphviz
+
+#load the dataset, and fit the model, note only three features to train the model
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+loan = loan[['loan_status','annual_inc','loan_amnt','emp_length']] #'term'
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+clf = tree.DecisionTreeClassifier(splitter= 'best', min_samples_split= 20000, min_samples_leaf=40000, max_depth=4, criterion= 'gini',random_state=42, class_weight='balanced')
+clf.fit(X_train, y_train)
+y_pred_best = clf.predict(X_test)
+
+#visualize result if Decision Tree model tree by utilizing graphviz package.
+features = X.columns.tolist()
+tree = tree.export_graphviz(clf, max_depth = 4, out_file=None, feature_names=features, class_names=['paid', 'default'], proportion=True, filled=True)
+graph = graphviz.Source(tree, format="png")
+graph
+
+# Extract the importances
+importances = clf.feature_importances_
+
+# Create a dataframe with the feature importance
+feature_importance = {}
+for i, feature in enumerate(features):
+    feature_importance[feature] = round(importances[i], 3)
+
+print(f"Feature importance: {feature_importance}")
+
+#utilizing shap library
+import shap
+shap.initjs()
+
+explainer = shap.TreeExplainer(clf, data=None)
+shap_values = explainer.shap_values(X_test)
+
+shap.summary_plot(shap_values, features=features)
+
+shap.force_plot(explainer.expected_value[1],shap_values[1][9], X_test.iloc[9])

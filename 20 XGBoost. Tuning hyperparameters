@@ -1,0 +1,470 @@
+#load packages
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import classification_report
+from sklearn.metrics import roc_curve, plot_roc_curve, auc, roc_auc_score, balanced_accuracy_score
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import precision_score
+from sklearn.metrics import recall_score
+from sklearn import metrics
+from xgboost import XGBClassifier
+import xgboost as xgb
+from sklearn.model_selection import RandomizedSearchCV
+from collections import Counter
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+#load and prepare dataset for train and test
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+#XGBoost with default hyperparameters
+xgb = XGBClassifier()
+xgb.fit(X_train, y_train)
+y_pred_xgb = xgb.predict(X_test)
+print('Accuracy of XGBClassifier classifier on train set: {:.2f}'.format(xgb.score(X_train, y_train)))
+print('Accuracy of XGBClassifier classifier on test set: {:.2f}'.format(xgb.score(X_test, y_test)))
+print('Recall of XGBClassifier classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred_xgb)))
+print('Precision of XGBClassifier classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred_xgb)))
+print('ROC/AUC of XGBClassifier classifier on test set: {:.2f}'.format(roc_auc_score(y_test, xgb.predict_proba(X_test)[:,1])))
+
+#XGBoost with objective: binary:logistic and scale_pos_weight
+xgb = XGBClassifier(objective = "binary:logistic")
+xgb.fit(X_train, y_train)
+y_pred_xgb = xgb.predict(X_test)
+print('Accuracy of XGBClassifier classifier on train set: {:.2f}'.format(xgb.score(X_train, y_train)))
+print('Accuracy of XGBClassifier classifier on test set: {:.2f}'.format(xgb.score(X_test, y_test)))
+print('Recall of XGBClassifier classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred_xgb)))
+print('Precision of XGBClassifier classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred_xgb)))
+print('ROC/AUC of XGBClassifier classifier on test set: {:.2f}'.format(roc_auc_score(y_test, xgb.predict_proba(X_test)[:,1])))
+
+#count class weights
+# count examples in each class
+counter = Counter(y)
+# calculate scale_pos_weight value
+class_0 = counter[0]
+class_1 = counter[1]
+weight = counter[0] / counter[1]
+print('scale_pos_weight value: %.3f' % weight)
+# print('Class 0: ' % class_0)
+# print('Class 1: ' % xclass_1)
+
+xgb = XGBClassifier(objective = "binary:logistic",scale_pos_weight = 3.819)
+xgb.fit(X_train, y_train)
+y_pred_xgb = xgb.predict(X_test)
+print('Accuracy of XGBClassifier classifier on train set: {:.2f}'.format(xgb.score(X_train, y_train)))
+print('Accuracy of XGBClassifier classifier on test set: {:.2f}'.format(xgb.score(X_test, y_test)))
+print('Recall of XGBClassifier classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred_xgb)))
+print('Precision of XGBClassifier classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred_xgb)))
+print('ROC/AUC of XGBClassifier classifier on test set: {:.2f}'.format(roc_auc_score(y_test, xgb.predict_proba(X_test)[:,1])))
+
+#confusion matrix
+clf_conf_matrix = confusion_matrix(y_test, y_pred_xgb)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(clf_conf_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+#Hyperparameters
+#max_depth [ 1, 3, 5, 10, 50, 100]
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, max_depth=1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, max_depth=3),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, max_depth=5),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, max_depth=10),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, max_depth=50),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, max_depth=100)
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+#viz
+plt.figure(figsize = (12,8))
+x = [1, 3, 5, 10, 50, 100]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('max_depth')
+plt.ylabel('model parameter performance')
+plt.title('How max_depth hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#min_child_weight ? (d=1) [ 0.1, 1, 10, 100]
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, min_child_weight=0.1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, min_child_weight=1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, min_child_weight=10),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, min_child_weight=100)
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+
+#viz
+plt.figure(figsize = (12,8))
+x = [0.1, 1, 10, 100]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('min_child_weight')
+plt.ylabel('model parameter performance')
+plt.title('How min_child_weight hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#gamma (d=0) ? [ 0.1, 0.2, 0.4, 0.8, 1, 10, 100]
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, gamma=0.1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, gamma=0.2),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, gamma=0.4),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, gamma=0.8),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, gamma=1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, gamma=10),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, gamma=100)
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [0.1, 0.2, 0.4, 0.8, 1, 10, 100]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('gamma')
+plt.ylabel('model parameter performance')
+plt.title('How gamma hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#booster = gbtree or dart
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, booster="gbtree"),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, booster="dart")
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#learning_rate (0.3 default) [ 0.01, 0.1, 0.3, 0.6, 0.9, 1]
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, learning_rate=0.01),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, learning_rate=0.1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, learning_rate=0.3),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, learning_rate=0.6),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, learning_rate=0.9),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, learning_rate=1)
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [ 0.01, 0.1, 0.3, 0.6, 0.9, 1]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('learning_rate')
+plt.ylabel('model parameter performance')
+plt.title('How learning_rate hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+
+#n_estimators (100 default) - [1, 10, 50, 100, 500]
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, n_estimators=1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, n_estimators=10),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, n_estimators=50),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, n_estimators=100),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, n_estimators=500)
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [1, 10, 50, 100, 500]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('n_estimators')
+plt.ylabel('model parameter performance')
+plt.title('How n_estimators hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+
+#subsample (default 1) [0.2, 0.5, 0.7, 1]
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, subsample=0.2),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, subsample=0.5),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, subsample=0.7),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, subsample=1)
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [0.2, 0.5, 0.7, 1]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('subsample')
+plt.ylabel('model parameter performance')
+plt.title('How subsample hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+
+#colsample_bytree (default) [0.2, 0.5, 0.7, 1]¶
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, colsample_bytree=0.2),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, colsample_bytree=0.5),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, colsample_bytree=0.7),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, colsample_bytree=1)
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [0.2, 0.5, 0.7, 1]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('colsample_bytree')
+plt.ylabel('model parameter performance')
+plt.title('How colsample_bytree hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+
+#lambda (d=1) l2 regularization [ 0, 0.2, 0.4, 0.8, 1, 10, 100]
+xgb_clf = [
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, reg_lambda=0),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, reg_lambda=0.2),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, reg_lambda=0.4),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, reg_lambda=0.8),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, reg_lambda=1),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, reg_lambda=10),
+    XGBClassifier(objective="binary:logistic", scale_pos_weight=3.819, reg_lambda=100)
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in xgb_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [0, 0.2, 0.4, 0.8, 1, 10, 100]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('reg_lambda')
+plt.ylabel('model parameter performance')
+plt.title('How reg_lambda hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#Tunning hyperparameters/ Random Search
+params = {
+     'max_depth': [ 3, 5, 10],
+     'min_child_weight':[ 0.1, 1, 100],
+     'gamma': [ 0.1, 1, 100],
+     'booster': ["gbtree", "dart"],
+     'learning_rate': [ 0.01, 0.1, 0.3, 0.9],
+     'n_estimators': [10, 50, 100],
+     'subsample': [0.5, 1],
+     'colsample_bytree':[0.2, 0.5, 1],
+     'reg_lambda': [0.2, 1, 10]
+
+ }
+
+
+clf = XGBClassifier(objective = "binary:logistic",scale_pos_weight = 3.819)
+clf_rs = RandomizedSearchCV(clf, params, n_iter=30, scoring='roc_auc',  n_jobs=-1)
+
+tunned_xgb = clf_rs.fit(X_train, y_train)
+print("Best parameters:", tunned_xgb.best_params_)
+
+#Tunned XGBoost model
+xgb_tunned = XGBClassifier(objective = "binary:logistic",scale_pos_weight = 3.819, subsample = 1,
+reg_lambda = 0.2, n_estimators = 100, min_child_weight = 0.1, max_depth = 5, learning_rate = 0.1,
+gamma = 0.1, colsample_bytree = 1, booster = 'dart')
+xgb_tunned.fit(X_train, y_train)
+y_pred_xgb_tunned = xgb_tunned.predict(X_test)
+print('Accuracy of XGBClassifier classifier on train set: {:.2f}'.format(xgb_tunned.score(X_train, y_train)))
+print('Accuracy of XGBClassifier classifier on test set: {:.2f}'.format(xgb_tunned.score(X_test, y_test)))
+print('Recall of XGBClassifier classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred_xgb_tunned)))
+print('Precision of XGBClassifier classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred_xgb_tunned)))
+print('ROC/AUC of XGBClassifier classifier on test set: {:.2f}'.format(roc_auc_score(y_test, xgb_tunned.predict_proba(X_test)[:,1])))
+
+#confusion matrix
+clf_conf_matrix = confusion_matrix(y_test, y_pred_xgb_tunned)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(clf_conf_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+
+

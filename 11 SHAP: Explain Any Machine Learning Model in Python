@@ -1,0 +1,35 @@
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+# load datset
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+
+# preraper datase for train and test
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+# fit model and and make prediction
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+
+#import shap library
+import shap
+shap.initjs()
+explainer = shap.Explainer(logreg, X_train)
+
+#Global Explainability
+shap_values = explainer(X_test)
+shap.plots.beeswarm(shap_values)
+
+shap.plots.bar(shap_values)
+
+
+#Local Explainability
+shap.plots.bar(shap_values[4])
+
+shap.plots.bar(shap_values[5])

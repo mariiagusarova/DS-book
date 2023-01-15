@@ -1,0 +1,69 @@
+#Import all required packages:
+
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, auc, roc_curve, roc_auc_score, accuracy_score, classification_report
+from sklearn.preprocessing import MinMaxScaler
+
+#load and prepare dataset
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+scaler = MinMaxScaler()
+
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+#Default Log Reg
+logreg = LogisticRegression()
+
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+
+print('Accuracy of logistic regression classifier on train set: {:.2f}'.format(logreg.score(X_train, y_train)))
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))
+print('Recall of logistic regression classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of logistic regression classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(roc_auc_score(y_test, logreg.predict_proba(X_test)[:,1])))
+
+
+logreg_conf_matrix = confusion_matrix(y_test, y_pred)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(logreg_conf_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+
+#Log Reg Adjusted Class Weight
+
+weights = {0:21, 1:79}
+
+logreg_w = LogisticRegression(class_weight = weights, max_iter = 1000)
+
+logreg_w.fit(X_train, y_train)
+
+y_pred_w = logreg_w.predict(X_test)
+
+print('Accuracy of logistic regression classifier on train set: {:.2f}'.format(logreg_w.score(X_train, y_train)))
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg_w.score(X_test, y_test)))
+print('Recall of logistic regression classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred_w)))
+print('Precision of logistic regression classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred_w)))
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(roc_auc_score(y_test, logreg_w.predict_proba(X_test)[:,1])))
+
+logreg_conf_matrix_w = confusion_matrix(y_test, y_pred_w)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(logreg_conf_matrix_w, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()

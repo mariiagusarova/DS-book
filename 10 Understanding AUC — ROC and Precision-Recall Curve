@@ -1,0 +1,60 @@
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+# load datset
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+
+# preraper datase for train and test
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+# fit model and and make prediction
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+
+
+#confusion matrix
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+confusion_matrix = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(confusion_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+#plot ROC curve
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
+logit_roc_auc = roc_auc_score(y_test, logreg.predict_proba(X_test)[:,1])
+fpr, tpr, thresholds = roc_curve(y_test, logreg.predict_proba(X_test)[:,1])
+plt.figure(figsize = (12,8))
+plt.plot(fpr, tpr, label='Logistic Regression (area = %0.2f)' % logit_roc_auc)
+plt.plot([0, 1], [0, 1],'r--')
+plt.text(0.5, 0.5, "varying threshold scores (0-1)", rotation=0, size=12,ha="center", va="center",bbox=dict(boxstyle="rarrow"))
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.savefig('Log_ROC')
+plt.show()
+
+#plot precision_recall_curve
+from sklearn.metrics import precision_recall_curve
+precision, recall, thresholds = precision_recall_curve(y_test, logreg.predict_proba(X_test)[:, 1])
+plt.figure(figsize = (12,8))
+plt.plot(recall, precision)
+plt.margins(0)
+plt.xlabel('Recall')
+plt.ylabel('Precision')
+plt.title('PR Curve')
+plt.legend(loc="lower right")
+plt.show()

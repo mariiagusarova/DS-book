@@ -1,0 +1,21 @@
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+# load datset
+loan = pd.read_csv('../input/prepared-lending-club-dataset/mycsvfile.csv', low_memory=True)
+
+loan.head()
+
+# split dataset for train and test
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+# create classifier and fit model
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+# make prediction
+y_pred = logreg.predict(X_test)
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))

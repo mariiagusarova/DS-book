@@ -1,0 +1,377 @@
+#load required packages
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, auc,roc_curve
+from sklearn.metrics import roc_auc_score
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.tree import export_graphviz
+
+#load and prepare dataset for train and test
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+#Default RandomForest
+clf_default=RandomForestClassifier()
+
+#Train the model using the training sets y_pred=clf.predict(X_test)
+clf_default.fit(X_train,y_train)
+
+y_pred=clf_default.predict(X_test)
+
+print('Accuracy of Random Forest classifier on train set: {:.2f}'.format(clf_default.score(X_train, y_train)))
+print('Accuracy of Random Forest classifier on test set: {:.2f}'.format(clf_default.score(X_test, y_test)))
+print('Recall of Random Forest classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of Random Forest classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of Random Forest classifier on test set: {:.2f}'.format(roc_auc_score(y_test, clf_default.predict_proba(X_test)[:,1])))
+
+#RandomForest with the best hyperparameters from DecisionTrees
+clf = RandomForestClassifier(min_samples_split= 10000, min_samples_leaf=75000,
+                             max_depth=3, criterion= 'gini',random_state=42, class_weight='balanced')
+
+clf.fit(X_train,y_train)
+
+y_pred=clf.predict(X_test)
+
+print('Accuracy of Random Forest classifier on train set: {:.2f}'.format(clf.score(X_train, y_train)))
+print('Accuracy of Random Forest classifier on test set: {:.2f}'.format(clf.score(X_test, y_test)))
+print('Recall of Random Forest classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of Random Forest classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of Random Forest classifier on test set: {:.2f}'.format(roc_auc_score(y_test, clf.predict_proba(X_test)[:,1])))
+
+#Manual Selection Of Hyperparameters
+
+#max_depth
+tree_clf = [
+    RandomForestClassifier(n_estimators=50, max_depth=3, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, max_depth=5, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, max_depth=10, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, max_depth=15, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, max_depth=20, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, max_depth=40, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, max_depth=100, random_state=42, class_weight='balanced')
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [3, 5, 10, 15, 20, 40,100]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('max_depth')
+plt.ylabel('model parameter performance')
+plt.title('How max_depth hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#min_samples_split
+tree_clf = [
+    RandomForestClassifier(n_estimators=50, min_samples_split=2, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=10, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=100, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=1000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=10000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=25000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=50000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=75000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=100000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=150000, random_state=42, class_weight='balanced')
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#vviz
+plt.figure(figsize = (12,8))
+x = [2, 10, 100, 1000, 10000, 25000, 50000, 75000, 100000, 150000]
+# corresponding y axis values
+y = clf_compare
+plt.plot(x,y)
+plt.xlabel('min_samples_split')
+plt.ylabel('model parameter performance')
+plt.title('How min_samples_split hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#min_samples_leaf
+tree_clf = [
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=2, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=10, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=100, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=1000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=10000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=25000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=50000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=75000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=100000, random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_leaf=150000, random_state=42, class_weight='balanced')
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [2, 10, 100, 1000, 10000, 25000, 50000, 75000, 100000, 150000]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('min_samples_leaf')
+plt.ylabel('model parameter performance')
+plt.title('How min_samples_leaf hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#max_features
+tree_clf = [
+    RandomForestClassifier(max_features=1, min_samples_split=1000, min_samples_leaf=1000, max_depth=10, random_state=42,
+                           class_weight='balanced'),
+    RandomForestClassifier(max_features=10, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_features=20, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_features=30, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_features=40, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_features=50, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_features=60, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced')
+
+]
+
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [1, 10, 20, 30, 40, 50, 60]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('max_features')
+plt.ylabel('model parameter performance')
+plt.title('How max_features affects Random Forest model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#n_estimators
+tree_clf = [
+    RandomForestClassifier(n_estimators=2, min_samples_split=1000, min_samples_leaf=1000, max_depth=10, random_state=42,
+                           class_weight='balanced'),
+    RandomForestClassifier(n_estimators=5, min_samples_split=1000, min_samples_leaf=1000, max_depth=10, random_state=42,
+                           class_weight='balanced'),
+    RandomForestClassifier(n_estimators=10, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=50, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=100, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=500, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(n_estimators=1000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced')
+]
+
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [2, 5, 10, 50, 100, 500, 1000]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('n_estimators')
+plt.ylabel('model parameter performance')
+plt.title('How n_estimators affects Random Forest model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#Boot strap
+tree_clf = [
+    RandomForestClassifier(max_samples=1000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_samples=10000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_samples=50000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_samples=100000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_samples=200000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_samples=400000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced'),
+    RandomForestClassifier(max_samples=600000, min_samples_split=1000, min_samples_leaf=1000, max_depth=10,
+                           random_state=42, class_weight='balanced')
+]
+
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#viz
+plt.figure(figsize = (12,8))
+x = [2, 5, 10, 50, 100, 500, 1000]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('max_samples')
+plt.ylabel('model parameter performance')
+plt.title('How max_samples affects Random Forest model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#Random search for param
+from sklearn.model_selection import RandomizedSearchCV
+clf1 = RandomForestClassifier(random_state=42, class_weight='balanced')
+space = dict()
+space['max_depth'] = [5,10,15]
+space['min_samples_split'] = [1000,10000,25000,50000]
+space['min_samples_leaf'] = [1000,10000,25000,50000,75000]
+space['max_features'] = [10,20,30]
+space['max_samples'] = [10000,50000,200000,600000]
+
+
+
+# define search
+search = RandomizedSearchCV(clf1, space, n_iter=30, scoring='roc_auc', n_jobs=-1)
+# execute search
+tunned_tree = search.fit(X_train, y_train)
+#y_pred_tunned = clf1.predict(X_test)
+# summarize result
+print("Parameters for RandomSearch", tunned_tree.best_params_)
+
+#Tunned model
+clf = RandomForestClassifier(min_samples_split= 1000, min_samples_leaf=1000,
+                             max_depth=5, max_features = 10, max_samples = 200000, random_state=42, class_weight='balanced')
+
+
+clf.fit(X_train,y_train)
+
+y_pred=clf.predict(X_test)
+
+print('Accuracy of Random Forest classifier on train set: {:.2f}'.format(clf.score(X_train, y_train)))
+print('Accuracy of Random Forest classifier on test set: {:.2f}'.format(clf.score(X_test, y_test)))
+print('Recall of Random Forest classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of Random Forest classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of Random Forest classifier on test set: {:.2f}'.format(roc_auc_score(y_test, clf.predict_proba(X_test)[:,1])))
+
+#confusion_matrix
+clf_conf_matrix = confusion_matrix(y_test, y_pred)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(clf_conf_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+#viz
+import graphviz
+from sklearn import tree
+features = X.columns.tolist()
+tree = tree.export_graphviz(clf.estimators_[0], max_depth = 3, out_file=None, feature_names=features, class_names=['paid', 'default'], proportion=True, filled=True)
+graph = graphviz.Source(tree, format="png")
+graph

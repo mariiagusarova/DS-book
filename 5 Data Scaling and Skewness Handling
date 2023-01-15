@@ -1,0 +1,55 @@
+#load packages and set pd formats
+import pandas as pd
+%matplotlib inline
+from matplotlib import pyplot as plt
+import numpy as np
+pd.set_option('display.float_format', lambda x: '%.1f' % x)
+from scipy import stats
+
+#load dataset
+loan = pd.read_csv('../input/lending-club/accepted_2007_to_2018Q4.csv.gz', compression='gzip', low_memory=True)
+
+#consider only business critical features
+loans = loan[['loan_amnt', 'term','int_rate', 'sub_grade', 'emp_length',
+'home_ownership', 'annual_inc', 'loan_status', 'addr_state', 'dti',
+'mths_since_recent_inq', 'revol_util', 'bc_open_to_buy', 'bc_util',
+'num_op_rev_tl']]
+
+#remove missing values
+loans = loans.dropna()
+
+loans['int_rate'].hist(bins = 10, figsize = (20,10), color = 'black')
+
+#Log Transformation
+loans['int_rate_log'] = np.log(loans['int_rate'])
+loans['int_rate_log'].hist(bins = 10, figsize = (20,10), color = 'black')
+
+#Square Root
+loans['int_rate_sqr'] = np.sqrt(loans['int_rate'])
+loans['int_rate_sqr'].hist(bins = 10, figsize = (20,10), color = 'black')
+
+#StandardScaler
+from sklearn import preprocessing
+
+scaler = preprocessing.StandardScaler()
+scaled_sc = scaler.fit_transform(loans[['int_rate']])
+scaled_sc = pd.DataFrame(scaled_sc, columns=['int_rate'])
+
+scaled_sc.hist(bins = 10, figsize = (20,10), color = 'black')
+
+#MinMaxScaler
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = preprocessing.MinMaxScaler()
+scaled_mms = scaler.fit_transform(loans[['int_rate']])
+scaled_mms = pd.DataFrame(scaled_mms, columns=['int_rate'])
+
+scaled_mms.hist(bins = 10, figsize = (20,10), color = 'black')
+
+#BoxCox (Power Transformer)
+from sklearn.preprocessing import power_transform
+
+scaled_bc = power_transform(loans[['int_rate']], method='box-cox')
+scaled_bc = pd.DataFrame(scaled_bc, columns=['int_rate'])
+
+scaled_bc.hist(bins = 10, figsize = (20,10), color = 'black')

@@ -1,0 +1,61 @@
+#load packages
+from sklearn.model_selection import train_test_split
+
+from sklearn import svm, model_selection, tree, linear_model, neighbors, naive_bayes, ensemble, discriminant_analysis, gaussian_process, neural_network
+#from sklearn.linear_model import Ridge
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from xgboost import XGBClassifier
+import xgboost as xgb
+from sklearn.calibration import CalibratedClassifierCV
+
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score, auc,roc_curve, roc_auc_score, classification_report
+from sklearn.naive_bayes import GaussianNB
+
+#load and prepare dataset for train and test
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+
+
+#list of models to train
+clf = [
+    ensemble.AdaBoostClassifier(),
+    ensemble.BaggingClassifier(),
+    ensemble.RandomForestClassifier(),
+    #linear_model.Perceptron(),
+    naive_bayes.GaussianNB(),
+    CalibratedClassifierCV(svm.LinearSVC()), # SVC does not have predict_proba, and is wrapped into CalibratedClassifierCV
+    tree.DecisionTreeClassifier(),
+    XGBClassifier(),
+    linear_model.LogisticRegression(),
+    KNeighborsClassifier()
+    ]
+
+# loop that fits all algorithms
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+
+row_index = 0
+for alg in clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Classifier'] = clf_name
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 4)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 4)
+    clf_compare.loc[row_index, 'Precission'] = precision_score(y_test, predicted)
+    clf_compare.loc[row_index, 'Recall'] = recall_score(y_test, predicted)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare.sort_values(by=['AUC'], ascending=False, inplace=True)
+clf_compare
+
+

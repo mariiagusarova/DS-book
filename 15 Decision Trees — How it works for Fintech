@@ -1,0 +1,21 @@
+from sklearn.model_selection import train_test_split
+from sklearn import tree
+from sklearn.tree import DecisionTreeClassifier
+
+#load and prepare dataset for train and test
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+#create a Decision Trees classifier, and fit model
+clf = tree.DecisionTreeClassifier(random_state=42, class_weight='balanced')
+model = clf.fit(X_train, y_train)
+y_pred = clf.predict(X_test)
+
+print('Accuracy of Decision Tree classifier on train set: {:.2f}'.format(clf.score(X_train, y_train)))
+print('Accuracy of Decision Tree classifier on test set: {:.2f}'.format(clf.score(X_test, y_test)))
+

@@ -1,0 +1,46 @@
+import numpy as np
+import sklearn.metrics
+
+# simple confusion matrix
+y_true = ["positive", "negative", "negative", "positive", "positive", "positive", "positive",  "positive","negative"]
+y_pred = ["positive", "negative", "positive","positive", "positive", "negative", "positive", "positive","positive"]
+
+cal = sklearn.metrics.confusion_matrix(y_true, y_pred)
+cal = np.flipud(cal)
+print(cal)
+
+
+# fit a logistic regression model for the given dataset
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+
+
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))
+
+#Confusion matrix
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+confusion_matrix = confusion_matrix(y_test, y_pred)
+
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(confusion_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+
+

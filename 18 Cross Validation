@@ -1,0 +1,110 @@
+#load required packages
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, auc, roc_curve, roc_auc_score, accuracy_score, classification_report
+from sklearn.preprocessing import MinMaxScaler
+
+#load the dataset, and fit the model
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+scaler = MinMaxScaler()
+
+x_scaled = scaler.fit_transform(X_train)
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+logreg = LogisticRegression(max_iter = 1000)
+
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+
+print('Accuracy of logistic regression classifier on train set: {:.2f}'.format(logreg.score(X_train, y_train)))
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))
+print('Recall of logistic regression classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of logistic regression classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(roc_auc_score(y_test, logreg.predict_proba(X_test)[:,1])))
+
+#K-Fold Cross-Validation
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+
+kfold = KFold(n_splits=10)
+results = cross_val_score(logreg, X_train, y_train, cv=kfold)
+print("Accuracy:%.2f%% (%.2f%%)" % (results.mean()*100, results.std()*100))
+
+#confusion_matrix
+from sklearn.model_selection import cross_val_predict
+from sklearn.metrics import confusion_matrix
+y_pred = cross_val_predict(logreg, X_train, y_train, cv=kfold)
+conf_mat = confusion_matrix(y_train, y_pred)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(conf_mat, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+# to calculate AUC
+y_pred_proba = cross_val_predict(logreg, X_train, y_train, cv=kfold, method='predict_proba')
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(roc_auc_score(y_test, logreg.predict_proba(X_test)[:,1])))
+
+#
+from sklearn.metrics import make_scorer, accuracy_score, precision_score, recall_score, f1_score
+from sklearn.model_selection import train_test_split
+from sklearn import model_selection
+
+
+scoring = {'accuracy' : make_scorer(accuracy_score),
+           'precision' : make_scorer(precision_score),
+           'recall' : make_scorer(recall_score),
+           'f1_score' : make_scorer(f1_score)}
+
+kfold_ms = model_selection.KFold(n_splits=10)
+
+results = model_selection.cross_validate(estimator=logreg,
+                                          X=X_train,
+                                          y=y_train,
+                                          cv=kfold_ms,
+                                          scoring=scoring)
+print("Accuracy:%.2f%% (%.2f%%)" % (results['test_accuracy'].mean()*100, results['test_accuracy'].std()*100))
+print("Precision:%.2f%% (%.2f%%)" % (results['test_precision'].mean()*100, results['test_precision'].std()*100))
+print("Recall:%.2f%% (%.2f%%)" % (results['test_recall'].mean()*100, results['test_recall'].std()*100))
+print("F1 Score:%.2f%% (%.2f%%)" % (results['test_f1_score'].mean()*100, results['test_f1_score'].std()*100))
+
+#Stratified K-Fold Cross-Validation
+from sklearn.model_selection import StratifiedKFold
+
+skf = StratifiedKFold(n_splits=2, shuffle=True, random_state=1)
+lst_accu_stratified = []
+
+dataset = loan
+skf = StratifiedKFold(n_splits=10)
+model = LogisticRegression(max_iter = 1000)
+x = loan
+y = dataset.loan_status
+
+def training(train, test, fold_no):
+  x_train = train.drop(['loan_status'],axis=1)
+  y_train = train.loan_status
+  x_test = test.drop(['loan_status'],axis=1)
+  y_test = test.loan_status
+  model.fit(x_train, y_train)
+  score = model.score(x_test,y_test)
+  print('For Fold {} the accuracy is {}'.format(str(fold_no),score))
+
+fold_no = 1
+for train_index,test_index in skf.split(x, y):
+  train = dataset.iloc[train_index,:]
+  test = dataset.iloc[test_index,:]
+  training(train, test, fold_no)
+  fold_no += 1
+
+  

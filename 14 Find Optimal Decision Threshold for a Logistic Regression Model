@@ -1,0 +1,85 @@
+#Load important packages:
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, auc,roc_curve,roc_auc_score, accuracy_score, precision_score, recall_score, classification_report, roc_curve
+from sklearn.preprocessing import MinMaxScaler
+
+#Load dataset and prepare testing and train sets:
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+scaler = MinMaxScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# Fit a logistic regression with default hyperparameters:
+logreg = LogisticRegression(max_iter = 1000)
+logreg.fit(X_train, y_train)
+y_pred = logreg.predict(X_test)
+y_pred_proba = logreg.predict_proba(X_test)
+print('Accuracy of logistic regression classifier on train set: {:.2f}'.format(logreg.score(X_train, y_train)))
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))
+print('Recall of logistic regression classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of logistic regression classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(roc_auc_score(y_test, logreg.predict_proba(X_test)[:,1])))
+
+y_pred_proba.view()[1:2]
+y_pred.view()[1:2]
+y_pred_proba.view()[2:3]
+
+logreg_conf_matrix = confusion_matrix(y_test, y_pred) plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4) a
+x = sns.heatmap(logreg_conf_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+#Calculate Optimal Decision Threshol
+from sklearn import metrics
+from sklearn.metrics import roc_curve
+fpr, tpr, thresholds = roc_curve(y_train,logreg.predict_proba(X_train)[:,1],drop_intermediate=False)
+plt.style.context('grayscale')
+plt.figure(figsize = (12,8))
+plt.scatter(thresholds,np.abs(fpr+tpr-1))
+plt.xlabel("Threshold")
+plt.ylabel("|FPR + TPR - 1|")
+plt.xlim([0.0, 1.05])
+plt.ylim([0.0, 1.05])
+plt.show()
+
+#vizualize calculaton
+
+o_tpr = tpr[np.argmin(np.abs(fpr+tpr-1))]
+o_fpr = fpr[np.argmin(np.abs(fpr+tpr-1))]
+o_threshold = thresholds[np.argmin(np.abs(fpr+tpr-1))]
+plt.figure(figsize = (12,8))
+plt.plot(fpr, tpr, label='Logistic Regression (area = %0.2f)' % logit_roc_auc)
+plt.plot([0, 1], [0, 1],'r--')
+plt.plot(o_fpr, o_tpr, 'ro', label='Best Threshold = %0.2f' % o_threshold)
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel('False Positive Rate')
+plt.ylabel('True Positive Rate')
+plt.title('Receiver operating characteristic')
+plt.legend(loc="lower right")
+plt.savefig('Log_ROC')
+plt.show()
+
+#rebuild metrics, and confusion matrix based on the most optimum threshold.
+y_pred_opt = (logreg.predict_proba(X_test)[:, 1] > o_threshold).astype('float')
+
+print('Recall of logistic regression classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred_opt)))
+print('Precision of logistic regression classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred_opt)))
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(roc_auc_score(y_test, logreg.predict_proba(X_test)[:,1])))
+
+logreg_conf_matrix_opt = confusion_matrix(y_test, y_pred_opt)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(logreg_conf_matrix_opt, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()

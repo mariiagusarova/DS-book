@@ -1,0 +1,122 @@
+#load packages and set pd formats
+%matplotlib inline
+from matplotlib import pyplot as plt
+#pd.set_option('display.float_format', lambda x: '%.0f' % x)
+from scipy import stats
+
+#load dataset
+loan = pd.read_csv('../input/lending-club/accepted_2007_to_2018Q4.csv.gz', compression='gzip', low_memory=True)
+loan.info()
+
+#consider only business critical features
+loans = loan[['id', 'loan_amnt', 'term','int_rate', 'sub_grade','home_ownership', 'addr_state','emp_length','grade', 'annual_inc', 'loan_status', 'dti',
+'mths_since_recent_inq', 'revol_util', 'bc_open_to_buy', 'bc_util', 'num_op_rev_tl']]
+
+#preprocessing
+
+#remove missing values
+loans = loans.dropna()
+
+#remove outliers
+q_low = loans["annual_inc"].quantile(0.08)
+q_hi  = loans["annual_inc"].quantile(0.92)
+loans = loans[(loans["annual_inc"] < q_hi) & (loans["annual_inc"] > q_low)]
+loans = loans[(loans['dti'] <=45)]
+q_hi  = loans['bc_open_to_buy'].quantile(0.95)
+loans = loans[(loans['bc_open_to_buy'] < q_hi)]
+loans = loans[(loans['bc_util'] <=160)]
+loans = loans[(loans['revol_util'] <=150)]
+loans = loans[(loans['num_op_rev_tl'] <=35)]
+
+#categorical features processing
+cleaner_app_type = {"term": {" 36 months": 1.0, " 60 months": 2.0},
+                    "sub_grade": {"A1": 1.0, "A2": 2.0, "A3": 3.0, "A4": 4.0, "A5": 5.0,
+                                  "B1": 11.0, "B2": 12.0, "B3": 13.0, "B4": 14.0, "B5": 15.0,
+                                  "C1": 21.0, "C2": 22.0, "C3": 23.0, "C4": 24.0, "C5": 25.0,
+                                  "D1": 31.0, "D2": 32.0, "D3": 33.0, "D4": 34.0, "D5": 35.0,
+                                  "E1": 41.0, "E2": 42.0, "E3": 43.0, "E4": 44.0, "E5": 45.0,
+                                  "F1": 51.0, "F2": 52.0, "F3": 53.0, "F4": 54.0, "F5": 55.0,
+                                  "G1": 61.0, "G2": 62.0, "G3": 63.0, "G4": 64.0, "G5": 65.0,
+                                    },
+                     "emp_length": {"< 1 year": 0.0, '1 year': 1.0, '2 years': 2.0, '3 years': 3.0, '4 years': 4.0,
+                                   '5 years': 5.0, '6 years': 6.0, '7 years': 7.0, '8 years': 8.0, '9 years': 9.0,
+                                   '10+ years': 10.0 }
+                   }
+loans = loans.replace(cleaner_app_type)
+
+#Label grooming
+array = ['Charged Off', 'Fully Paid']
+loans = loans.loc[loans['loan_status'].isin(array)]
+loans.head()
+
+cleaner_app_type1 = {"loan_status": { "Fully Paid": 1.0, "Charged Off": 0.0}}
+loans = loans.replace(cleaner_app_type1)
+
+
+#drop columns
+loans = loans.drop('grade', axis=1)
+loans = loans.drop('id', axis=1)
+
+#define the list of categorical features want to process
+cat_columns = ["home_ownership", "addr_state"]
+#create a new DataFrame for our processed data
+df_processed = pd.get_dummies(loans, prefix_sep="__",
+                              columns=cat_columns)
+df_processed.head()
+
+#income
+bins = [30000, 50000, 70000, 90000, 110000, 130000, 150000]
+labels = ['30-50k', '50-70k', '70-90k', '90-110k','110-130k','130-150k']
+loans['binned'] = pd.cut(loans['annual_inc'], bins=bins, labels=labels)
+analyse_income = loans.groupby(['binned','loan_status'])['loan_status'].count()
+analyse_income
+
+analyse_income = analyse_income.groupby(level=0).apply(lambda x:
+                                                 100 * x / float(x.sum()))
+analyse_income = analyse_income.unstack()
+analyse_income
+
+#plot income
+analyse_income.plot.area()
+
+
+#Employment Length
+analyse_emp_length = loans.groupby(['emp_length','loan_status'])['loan_status'].count()
+analyse_emp_length = analyse_emp_length.groupby(level=0).apply(lambda x:
+                                                 100 * x / float(x.sum()))
+analyse_emp_length = analyse_emp_length.unstack()
+analyse_emp_length
+
+analyse_emp_length.plot.area()
+
+#Home Ownership
+analyse_home_ownership = loans.groupby(['home_ownership','loan_status'])['loan_status'].count()
+analyse_home_ownership = analyse_home_ownership.groupby(level=0).apply(lambda x:
+                                                 100 * x / float(x.sum()))
+analyse_home_ownership
+
+#DTI
+binsdti = [1, 10, 20, 30, 40, 50]
+labelsdti = ['1-10', '10-20', '20-30','30-40','40-50']
+loans['binneddti'] = pd.cut(loans['dti'], bins=binsdti, labels=labelsdti)
+analyse_dti = loans.groupby(['binneddti','loan_status'])['loan_status'].count()
+analyse_dti = analyse_dti.groupby(level=0).apply(lambda x:
+                                                 100 * x / float(x.sum()))
+analyse_dtianalyse_dti = analyse_dti.unstack()
+analyse_dtianalyse_dti
+
+#Subgrade
+analyse_sub_grade = loans.groupby(['sub_grade','loan_status'])['loan_status'].count()
+analyse_sub_grade = analyse_sub_grade.groupby(level=0).apply(lambda x:
+                                                 100 * x / float(x.sum()))
+analyse_sub_grade = analyse_sub_grade.unstack()
+analyse_sub_grade.plot.area()
+
+loans = loan[['id', 'loan_amnt', 'term','int_rate', 'sub_grade','home_ownership', 'addr_state','emp_length','grade', 'annual_inc', 'loan_status', 'dti',
+'mths_since_recent_inq', 'revol_util', 'bc_open_to_buy', 'bc_util', 'num_op_rev_tl', 'emp_title']]
+
+plt.figure(figsize=(15, 12))
+plt.subplot(2, 2, 2)
+plt.barh(loans.emp_title.value_counts()[:10].index, loans.emp_title.value_counts()[:10])
+plt.title("The most 10 jobs title applied for a loan")
+plt.tight_layout()

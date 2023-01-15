@@ -1,0 +1,77 @@
+#load packages
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Activation
+from tensorflow.keras.constraints import max_norm
+from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.models import load_model
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+import seaborn as sns
+import tensorflow as tf
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import roc_curve, plot_roc_curve, auc, roc_auc_score
+
+#load and prepare dataset for train and test
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+X = loans.drop('loan_status', axis=1)
+y = loans['loan_status']
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+scaler = MinMaxScaler()
+
+# fit and transfrom
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# everything has been scaled between 1 and 0
+print('Max: ',X_train.max())
+print('Min: ', X_train.min())
+
+#create a simple model with an input layer, one hidden layer, and an output layer.
+s_model = Sequential()
+
+# input + hidden layer
+s_model.add(Dense(32, input_shape=(65,), activation='relu')) #the first Dense layer serves two purposes 1) is an input layer and 2) the first hidden layer
+
+# output layer
+s_model.add(Dense(1, activation='sigmoid'))
+
+# compile model
+s_model.compile(loss='binary_crossentropy', optimizer='SGD', metrics=[tf.keras.metrics.AUC()])
+
+#fit the model
+s_model.fit(x=X_train,
+          y=y_train,
+          epochs=10,
+          verbose = 2,
+          batch_size=256,
+          validation_data=(X_test, y_test)
+         )
+
+#visualize the model learning process
+s_losses = pd.DataFrame(s_model.history.history)
+
+plt.figure(figsize=(15,5))
+sns.lineplot(data=s_losses,lw=3)
+plt.xlabel('Epochs')
+plt.ylabel('')
+plt.title('Training Loss per Epoch')
+sns.despine()
+
+#confusion matrix
+s_model.predict(X_test)
+s_y_pred = (s_model.predict(X_test)>=0.5)[:,0]
+
+confusion_matrix = confusion_matrix(y_test, s_y_pred)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(confusion_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()

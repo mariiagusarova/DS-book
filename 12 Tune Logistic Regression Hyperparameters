@@ -1,0 +1,151 @@
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, auc, roc_curve
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.metrics import roc_auc_score
+
+# load datset
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+
+# preraper datase for train and test
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+# fit model and and make prediction with default hyperparameters
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+
+print('Accuracy of logistic regression classifier on train set: {:.2f}'.format(logreg.score(X_train, y_train)))
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))
+print('Recall of logistic regression classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of logistic regression classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(
+    roc_auc_score(y_test, logreg.predict_proba(X_test)[:, 1])))
+
+# Manual Hyperparameters Tunning
+
+# Solvers w/o penalty
+clf = [
+    LogisticRegression(solver='newton-cg', penalty='none', max_iter=1000),
+    LogisticRegression(solver='lbfgs', penalty='none', max_iter=1000),
+    LogisticRegression(solver='sag', penalty='none', max_iter=1000),
+    LogisticRegression(solver='saga', penalty='none', max_iter=1000)
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, logreg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare.sort_values(by=['AUC'], ascending=False, inplace=True)
+clf_compare
+
+# Adding penalty L2
+clf = [
+    LogisticRegression(solver='newton-cg', penalty='l2', max_iter=1000),
+    LogisticRegression(solver='lbfgs', penalty='l2', max_iter=1000),
+    LogisticRegression(solver='sag', penalty='l2', max_iter=1000),
+    LogisticRegression(solver='saga', penalty='l2', max_iter=1000)
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, logreg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare.sort_values(by=['AUC'], ascending=False, inplace=True)
+clf_compare
+
+#Adding C
+clf = [
+    LogisticRegression(solver='newton-cg', penalty='l2', max_iter=1000, C=0.01),
+    LogisticRegression(solver='lbfgs', penalty='l2', max_iter=1000, C=0.01),
+    LogisticRegression(solver='sag', penalty='l2', max_iter=1000, C=0.01),
+    LogisticRegression(solver='saga', penalty='l2', max_iter=1000, C=0.01),
+    LogisticRegression(solver='newton-cg', penalty='l2', max_iter=1000, C=1),
+    LogisticRegression(solver='lbfgs', penalty='l2', max_iter=1000, C=1),
+    LogisticRegression(solver='sag', penalty='l2', max_iter=1000, C=1),
+    LogisticRegression(solver='saga', penalty='l2', max_iter=1000, C=1),
+    LogisticRegression(solver='newton-cg', penalty='l2', max_iter=1000, C=10),
+    LogisticRegression(solver='lbfgs', penalty='l2', max_iter=1000, C=10),
+    LogisticRegression(solver='sag', penalty='l2', max_iter=1000, C=10),
+    LogisticRegression(solver='saga', penalty='l2', max_iter=1000, C=10)
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, logreg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare.sort_values(by=['AUC'], ascending=False, inplace=True)
+clf_compare
+
+#RandomizedSearchCV
+# define search space
+space = dict()
+space['solver'] = ['lbfgs', 'saga']
+space['penalty'] = ['none', 'l2'] #'not all solvers work with all penalties
+space['C'] = [0.1, 1, 10]
+
+# define search
+search = RandomizedSearchCV(logreg, space, n_iter=10, scoring='recall', n_jobs=-1)
+
+# execute search
+tunned_logreg = search.fit(X_train, y_train)
+# summarize result
+print('Recall of tunned_logreg: {:.4f}'.format(tunned_logreg.score(X_test, y_test)))
+print('Best Hyperparameters: %s' % tunned_logreg.best_params_)
+
+#ROC/AUC w/o MinMax Scaler
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+logreg = LogisticRegression()
+logreg.fit(X_train, y_train)
+
+y_pred = logreg.predict(X_test)
+
+print('Accuracy of logistic regression classifier on train set: {:.2f}'.format(logreg.score(X_train, y_train)))
+print('Accuracy of logistic regression classifier on test set: {:.2f}'.format(logreg.score(X_test, y_test)))
+print('Recall of logistic regression classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of logistic regression classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of logistic regression classifier on test set: {:.2f}'.format(roc_auc_score(y_test, logreg.predict_proba(X_test)[:,1])))
