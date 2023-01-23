@@ -1,0 +1,279 @@
+#load required packages
+from sklearn.model_selection import train_test_split
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, auc, roc_curve, roc_auc_score, accuracy_score, classification_report
+from sklearn import tree
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import tree as sklearn_tree
+import graphviz
+
+#load and prepare dataset for train and test
+loan = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+loan = loan[['loan_status','annual_inc','loan_amnt','emp_length', 'term']]
+X = loan.drop('loan_status', axis=1)
+y = loan[['loan_status']]
+y = y.values.ravel()
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+# Decision Tree Classifier with default paramaters
+clf = tree.DecisionTreeClassifier(random_state=42,class_weight='balanced')
+model = clf.fit(X_train, y_train)
+y_pred = clf.predict(X_test)
+print('Accuracy of Decision Tree classifier on train set: {:.2f}'.format(clf.score(X_train, y_train)))
+print('Accuracy of Decision Tree classifier on test set: {:.2f}'.format(clf.score(X_test, y_test)))
+print('Recall of Decision Tree classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of Decision Tree classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of Decision Treeclassifier on test set: {:.2f}'.format(roc_auc_score(y_test, clf.predict_proba(X_test)[:,1])))
+
+#visualize the Decision tree with default hyperparameters
+features = X.columns.tolist()
+tree = tree.export_graphviz(clf, max_depth = 3, out_file=None, feature_names=features, class_names=['paid', 'default'], proportion=True, filled=True)
+
+graph = graphviz.Source(tree, format="png")
+graph
+
+#"ccp_alpha": [0, 1, 10, 100]
+tree_clf = [
+    tree.DecisionTreeClassifier(ccp_alpha=0.1, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=0.01, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=0.001, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=0.0001, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=0.00001, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=0.000001, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=0.5, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=1, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(ccp_alpha=10, random_state=42, class_weight='balanced')
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#visualize
+plt.figure(figsize = (12,8))
+x = [0.1, 0.01, 0.001, 0.0001, 0.00001, 0.000001, 0.5, 1, 10]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('ccp_alpha')
+plt.ylabel('model parameter performance')
+plt.title('How ccp_alpha affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#'max_depth': [3,5,10,15,20, 40, 100]
+tree_clf = [
+    tree.DecisionTreeClassifier(max_depth=3, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=5, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=10, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=15, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=20, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=40, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=100, random_state=42, class_weight='balanced')
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#plot
+tree_clf = [
+    tree.DecisionTreeClassifier(max_depth=3, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=5, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=10, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=15, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=20, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=40, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(max_depth=100, random_state=42, class_weight='balanced')
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#"min_samples_split": [2,5,7,10, 20, 25, 30, 35, 40, 45, 50]
+tree_clf = [
+    tree.DecisionTreeClassifier(min_samples_split=2, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=10, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=100, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=1000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=10000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=25000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=50000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=75000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=100000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_split=150000, random_state=42, class_weight='balanced')
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#plot
+plt.figure(figsize = (12,8))
+x = [2, 10, 100, 1000, 10000, 25000, 50000, 75000, 100000, 150000]
+# corresponding y axis values
+y = clf_compare
+plt.plot(x,y)
+plt.xlabel('min_samples_split')
+plt.ylabel('model parameter performance')
+plt.title('How min_samples_split hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#'min_samples_leaf': [1,2,5,10, 15, 20, 25, 30, 35, 40]
+tree_clf = [
+    tree.DecisionTreeClassifier(min_samples_leaf=2, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=10, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=100, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=1000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=10000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=25000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=50000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=75000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=100000, random_state=42, class_weight='balanced'),
+    tree.DecisionTreeClassifier(min_samples_leaf=150000, random_state=42, class_weight='balanced')
+
+]
+clf_columns = []
+clf_compare = pd.DataFrame(columns=clf_columns)
+row_index = 0
+
+for alg in tree_clf:
+    predicted = alg.fit(X_train, y_train).predict(X_test)
+    fp, tp, th = roc_curve(y_test, predicted)
+    clf_name = alg.__class__.__name__
+    clf_compare.loc[row_index, 'Train Accuracy'] = round(alg.score(X_train, y_train), 5)
+    clf_compare.loc[row_index, 'Test Accuracy'] = round(alg.score(X_test, y_test), 5)
+    clf_compare.loc[row_index, 'Precission'] = round(precision_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'Recall'] = round(recall_score(y_test, predicted), 5)
+    clf_compare.loc[row_index, 'AUC'] = round(roc_auc_score(y_test, alg.predict_proba(X_test)[:, 1]), 5)
+
+    row_index += 1
+
+clf_compare
+
+#plot
+plt.figure(figsize = (12,8))
+x = [2, 10, 100, 1000, 10000, 25000, 50000, 75000, 100000, 150000]
+# corresponding y axis values
+y = clf_compare
+plt.figure(figsize = (12,8))
+plt.plot(x,y)
+plt.xlabel('min_samples_leaf')
+plt.ylabel('model parameter performance')
+plt.title('How min_samples_leaf hyperparameter affects model performance')
+plt.legend(['Train Accuracy', 'Test Accuracy', 'Precission', 'Recall', 'AUC'],loc='upper right', title='model metrics')
+plt.show()
+
+#Random search for param
+
+from sklearn.model_selection import RandomizedSearchCV
+
+clf1 = DecisionTreeClassifier(random_state=42, class_weight='balanced')
+
+space = dict()
+space['criterion']= ['gini','entropy']
+space['splitter'] = ['best', 'random']
+space['max_depth'] = [3,5,10]
+space['min_samples_split'] = [10000,25000,50000]
+space['min_samples_leaf'] = [25000,50000,75000]
+
+# define search
+search = RandomizedSearchCV(clf1, space, n_iter=30, scoring='roc_auc', n_jobs=-1)
+# execute search
+tunned_tree = search.fit(X_train, y_train)
+#y_pred_tunned = clf1.predict(X_test)
+
+# summarize result
+print("Param for RandomSearch", tunned_tree.best_params_)
+print('Accuracy of Decision Tree classifier on train set: {:.2f}'.format(tunned_tree.score(X_train, y_train)))
+print('Accuracy of Decision Tree classifier on test set: {:.2f}'.format(tunned_tree.score(X_test, y_test)))
+print('Recall of Decision Tree classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of Decision Tree classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of Decision Treeclassifier on test set: {:.2f}'.format(roc_auc_score(y_test, tunned_tree.predict_proba(X_test)[:,1])))
+
+#Model with best hyperparameters
+from sklearn import tree
+from sklearn.tree import DecisionTreeClassifier
+from sklearn import tree as sklearn_tree
+
+clf = tree.DecisionTreeClassifier(splitter= 'best', min_samples_split= 25000, min_samples_leaf=25000, max_depth=10,
+                                  criterion= 'gini',random_state=42, class_weight='balanced')
+model = clf.fit(X_train, y_train)
+y_pred_best = clf.predict(X_test)
+
+print('Accuracy of Decision Tree classifier on train set: {:.2f}'.format(clf.score(X_train, y_train)))
+print('Accuracy of Decision Tree classifier on test set: {:.2f}'.format(clf.score(X_test, y_test)))
+print('Recall of Decision Tree classifier on test set: {:.2f}'.format(recall_score(y_test, y_pred)))
+print('Precision of Decision Tree classifier on test set: {:.2f}'.format(precision_score(y_test, y_pred)))
+print('ROC/AUC of Decision Treeclassifier on test set: {:.2f}'.format(roc_auc_score(y_test, clf.predict_proba(X_test)[:,1])))
+
+clf_conf_matrix_best = confusion_matrix(y_test, y_pred_best)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(clf_conf_matrix_best, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+tree = tree.export_graphviz(clf, max_depth = 3, out_file=None, feature_names=features, class_names=['paid', 'default'], proportion=True, filled=True)
+graph = graphviz.Source(tree, format="png")
+graph
