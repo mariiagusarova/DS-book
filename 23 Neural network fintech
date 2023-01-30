@@ -1,0 +1,242 @@
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from sklearn.preprocessing import MinMaxScaler
+import matplotlib.pyplot as plt
+import seaborn as sns
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Activation
+from tensorflow.keras.constraints import max_norm
+from tensorflow.keras.optimizers import Adam, SGD
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.models import load_model
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import roc_curve, plot_roc_curve, auc, roc_auc_score
+import keras_tuner as kt
+from keras_tuner import RandomSearch
+from keras.layers import Activation, Dense
+
+#load dataset
+loans = pd.read_csv('../input/preprocessed-lending-club-dataset-v2/mycsvfile.csv', low_memory=True)
+loans.head()
+
+#Train/Test Split
+X = loans.drop('loan_status', axis=1)
+y = loans['loan_status']
+
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+
+scaler = MinMaxScaler()
+
+# fit and transfrom
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# everything has been scaled between 1 and 0
+print('Max: ',X_train.max())
+print('Min: ', X_train.min())
+
+#Hyperparam Tuning
+
+#Batch Size [4, 16, 32, 64, 128, 256]
+#Epochs [2, 4, 8, 16, 32]
+#optimizer = ['SGD', 'RMSprop', 'Adagrad', 'Adadelta', 'Adam', 'Adamax', 'Nadam'] Adam or SGD the most popular ones
+#learn_rate = [0.001, 0.01, 0.1, 0.3]
+
+#only hidden layer, sigmoid required in output for binary. activation = ['softmax', 'softplus', 'softsign', 'relu', 'tanh', 'sigmoid', 'hard_sigmoid', 'linear']
+#dropout_rate = [0.0, 0.2, 0.4, 0.7, 0.9]
+#neurons or units = [2, 8, 16, 32, 64]
+#The most common rule of thumb is to choose a number of hidden neurons between 1 and the number of input variables
+# number of hidden layers = [1, 2, 4, 8]
+
+#momentum = [0.0, 0.2, 0.6, 0.9]
+#Neural network weight initialization. init_mode = ['uniform', 'lecun_uniform', 'normal', 'zero', 'glorot_normal', 'glorot_uniform', 'he_normal', 'he_uniform']
+
+class ClfHyperModel(kt.HyperModel):
+
+    def __init__(self, input_shape):
+        self.input_shape = input_shape
+
+    def build(self, hp):
+        model = Sequential()
+
+        model.add(
+            Dense(
+                units=hp.Int('units', 8, 32, 4, default=8),
+                activation=hp.Choice(
+                    'dense_activation',
+                    values=['relu', 'tanh', 'softmax'],
+                    default='relu'),
+                input_shape=input_shape
+            )
+        )
+
+        model.add(
+            Dropout(
+                hp.Float(
+                    'dropout',
+                    min_value=0.0,
+                    max_value=0.3,
+                    default=0.0,
+                    step=0.05)
+            )
+        )
+
+        model.add(Dense(1, activation='sigmoid'))
+
+        hp_learning_rate = hp.Choice('learning_rate',
+                                     values=[1e-2, 1e-3, 1e-4]
+                                     )
+        optimizers_dict = {
+            "Adam": Adam(learning_rate=hp_learning_rate),
+            "SGD": SGD(learning_rate=hp_learning_rate),
+        }
+
+        hp_optimizers = hp.Choice(
+            'optimizer',
+            values=["Adam", "SGD"]
+        )
+
+        model.compile(optimizer=optimizers_dict[hp_optimizers], loss='binary_crossentropy',
+                      metrics=[tf.keras.metrics.AUC()])
+
+        return model
+
+    def fit(self, hp, model, *args, **kwargs):
+        return model.fit(
+            *args,
+            batch_size=hp.Choice("batch_size", [16, 32, 64, 128]),
+            **kwargs,
+        )
+
+
+input_shape = (X_train.shape[1],)
+hypermodel = ClfHyperModel(input_shape)
+
+
+tuner_rs = RandomSearch(
+            hypermodel,
+            objective=kt.Objective("val_auc", direction="max"),
+            seed=42,
+            max_trials=20, #represents the number of hyperparameter combinations that will be tested by the tuner
+            executions_per_trial=1 ) #the number of models that should be built and fit for each trial e.g. max_trials = 2 and exec = 3 = 6 total runs
+
+
+tuner_rs.search(X_train, y_train, epochs=30, validation_split=0.2, verbose=1, callbacks=[tf.keras.callbacks.EarlyStopping(patience=2)])
+
+
+best_hps=tuner_rs.get_best_hyperparameters(num_trials=1)[0]
+
+print(f"""
+units {best_hps.get('units')} 
+optimizer {best_hps.get('optimizer')} 
+activation {best_hps.get('dense_activation')} 
+dropout {best_hps.get('dropout')} 
+batch_size {best_hps.get('batch_size')} 
+learning_rate {best_hps.get('learning_rate')} 
+""")
+
+
+tuned_model = tuner_rs.hypermodel.build(best_hps)
+
+tuned_model.fit(x=X_train,
+          y=y_train,
+          epochs=30,
+          verbose = 2,
+          validation_data=(X_test, y_test)
+         )
+
+
+#Create a model
+#Training loss per epoch
+#This plot shows the training loss per epoch.
+#This plot helps us to see if there is overfitting in the model. In this case there is no overfitting because both lines go down at the same time.
+
+losses = pd.DataFrame(tuned_model.history.history)
+
+plt.figure(figsize=(15,5))
+sns.lineplot(data=losses,lw=3)
+plt.xlabel('Epochs')
+plt.ylabel('')
+plt.title('Training Loss per Epoch')
+sns.despine()
+
+
+tuned_model.predict(X_test)
+y_pred = (tuned_model.predict(X_test)>=0.5)[:,0]
+
+#confuison matrix
+tn_confusion_matrix = confusion_matrix(y_test, y_pred)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(tn_confusion_matrix, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+#calculate threshold
+fpr, tpr, thresholds = roc_curve(y_train,tuned_model.predict(X_train),drop_intermediate=False) #[:,1]
+plt.scatter(thresholds,np.abs(fpr+tpr-1))
+plt.xlabel("Threshold")
+plt.ylabel("|FPR + TPR - 1|")
+plt.xlim([0.0, 1.05])
+plt.ylim([0.0, 1.05])
+plt.show()
+
+
+o_threshold = thresholds[np.argmin(np.abs(fpr+tpr-1))]
+o_threshold
+
+#confusion matrix with threshld
+tuned_model.predict(X_test)
+y_pred_o = (tuned_model.predict(X_test)>=0.22)[:,0]
+
+confusion_matrix_o = confusion_matrix(y_test, y_pred_o)
+plt.figure(figsize = (12,8))
+sns.set(font_scale=1.4)
+ax = sns.heatmap(confusion_matrix_o, cmap='Blues',annot=True, fmt='d', square=True,xticklabels=['fully paid (0)', 'charged off (1)'], yticklabels=['fully paid (0)', 'charged off (1)'])
+ax.set(xlabel='Predicted', ylabel='Actual')
+ax.invert_yaxis()
+ax.invert_xaxis()
+
+
+#3 Layers with Tuned Hyperparams
+t_model = Sequential()
+
+# input layer
+t_model.add(Dense(32, input_shape=(65,), activation='softmax')) #the first Dense layer serves two purposes 1) is an input layer and 2) the first hidden layer
+t_model.add(Dropout(0.0))
+
+# hidden layer
+t_model.add(Dense(32,activation='softmax'))
+t_model.add(Dropout(0.0))
+
+# hidden layer
+t_model.add(Dense(32,activation='softmax'))
+t_model.add(Dropout(0.0))
+
+# output layer
+t_model.add(Dense(1, activation='sigmoid'))
+
+# compile model
+t_model.compile(loss='binary_crossentropy', optimizer='adam', metrics=[tf.keras.metrics.AUC()]) #metrics=['accuracy']) # 1) we use 'binary_crossentropy' sicne this is a binary classification problem
+
+
+t_model.fit(x=X_train,
+          y=y_train,
+          epochs=50,
+          verbose = 2,
+          batch_size=64,
+          validation_data=(X_test, y_test)
+         )
+
+
+t_losses = pd.DataFrame(t_model.history.history)
+
+plt.figure(figsize=(15,5))
+sns.lineplot(data=t_losses,lw=3)
+plt.xlabel('Epochs')
+plt.ylabel('')
+plt.title('Training Loss per Epoch')
+sns.despine()
