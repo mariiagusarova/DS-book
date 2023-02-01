@@ -1,6 +1,6 @@
 # DS-book
 
-introduction to Data science with python
+**introduction to Data science with python**
 
 A complete guide to learn data science and machine learning step by step based on a real end-to-end project
 
